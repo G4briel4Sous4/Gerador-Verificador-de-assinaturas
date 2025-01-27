@@ -60,7 +60,7 @@ if __name__ == "__main__":
     save_keys(private_key, public_key)
 
     # Mensagem a ser cifrada
-    message = "Este é um teste de RSA com OAEP."
+    message = "Mensagem de teste para RSA com OAEP"
     print(f"Mensagem original: {message}")
 
     # Cifração

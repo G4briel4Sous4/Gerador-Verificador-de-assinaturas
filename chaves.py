@@ -26,15 +26,13 @@ def miller_rabin(n, k=40):
             return False
     return True
 
-# Função para gerar um número primo de pelo menos n bits
 def generate_prime(bits=1024):
-    """ Gera um número primo de pelo menos 'bits' bits utilizando o teste de Miller-Rabin """
+    """Gera um número primo com exatamente 'bits' bits usando o teste de Miller-Rabin."""
     while True:
-        num = random.getrandbits(bits)
-        if num % 2 == 0:  # Garantir que seja ímpar
-            num += 1
+        num = random.getrandbits(bits) | (1 << (bits - 1)) | 1  # Garantir o bit mais significativo e ímpar
         if miller_rabin(num):
             return num
+
 
 # Função para calcular o inverso multiplicativo de e módulo φ(n)
 def mod_inverse(a, m):
@@ -50,40 +48,35 @@ def mod_inverse(a, m):
         x1 += m0
     return x1
 
-# Função para gerar as chaves pública e privada RSA
 def generate_rsa_keys(bits=1024):
-    """ Gera as chaves pública e privada RSA """
-    # Passo 1: Gerar dois números primos grandes p e q
-    p = generate_prime(bits)
-    q = generate_prime(bits)
+    """Gera as chaves pública e privada RSA com um módulo n de exatamente 'bits' bits."""
+    prime_bits = bits // 2
+    while True:
+        p = generate_prime(prime_bits)
+        q = generate_prime(prime_bits)
+        n = p * q
+        if n.bit_length() == bits:  # Verificar se n tem exatamente 'bits' bits
+            break
     
-    # Passo 2: Calcular n e φ(n)
-    n = p * q
     phi_n = (p - 1) * (q - 1)
-    
-    # Passo 3: Escolher e (geralmente 65537) tal que gcd(e, φ(n)) = 1
     e = 65537
     while gcd(e, phi_n) != 1:
         e = random.randrange(2, phi_n)
-    
-    # Passo 4: Calcular d, o inverso de e módulo φ(n)
     d = mod_inverse(e, phi_n)
-    
-    # Retornar a chave pública (e, n) e a chave privada (d, n)
     public_key = (e, n)
     private_key = (d, n)
-    
     return public_key, private_key
 
-# Função para testar a geração de chaves
-def test_rsa_key_generation():
-    public_key, private_key = generate_rsa_keys(bits=1024)
-    print("Chave Pública: (e, n)")
-    print("e:", public_key[0])
-    print("n:", public_key[1])
-    print("\nChave Privada: (d, n)")
-    print("d:", private_key[0])
-    print("n:", private_key[1])
 
-# Executando o teste para gerar as chaves RSA
-test_rsa_key_generation()
+# Função para testar a geração de chaves
+# def test_rsa_key_generation():
+#     public_key, private_key = generate_rsa_keys(bits=1024)
+#     print("Chave Pública: (e, n)")
+#     print("e:", public_key[0])
+#     print("n:", public_key[1])
+#     print("\nChave Privada: (d, n)")
+#     print("d:", private_key[0])
+#     print("n:", private_key[1])
+
+# # Executando o teste para gerar as chaves RSA
+# test_rsa_key_generation()
