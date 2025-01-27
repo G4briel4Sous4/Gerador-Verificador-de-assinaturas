@@ -1,2 +1,3 @@
 Ignorar parte1 e parte1Decrypt (não funcionam)
 rsa funciona e rsaOAEP também funciona!
+chaves.py gera as chaves com sucesso!
