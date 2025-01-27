@@ -1,5 +1,4 @@
 import random
-from math import gcd
 from hashlib import sha256
 from chaves import generate_rsa_keys
 
@@ -130,7 +129,7 @@ def test_rsa_encryption():
     print("n:", private_key[1])
 
     # Teste de cifração e decifração
-    message = "Mensagem secreta"
+    message = "Bia"
     print("\nMensagem original:", message)
 
     # Cifração
