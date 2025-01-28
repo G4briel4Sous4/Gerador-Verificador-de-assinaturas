@@ -129,7 +129,7 @@ def test_rsa_encryption():
     print("n:", private_key[1])
 
     # Teste de cifração e decifração
-    message = "Bia"
+    message = "Mensagem Secreta"
     print("\nMensagem original:", message)
 
     # Cifração
