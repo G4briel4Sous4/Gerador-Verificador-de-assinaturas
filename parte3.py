@@ -1,12 +1,12 @@
+from hashlib import sha3_256  # Usar sha3_256 da hashlib
 import random
-from hashlib import sha256
 from Crypto.Cipher import AES
 from Crypto.Random import get_random_bytes
 from chaves import generate_rsa_keys
 import base64
 
 # Função para o Gerador de Máscara MGF1
-def mgf1(seed, mask_len, hash_function=sha256):
+def mgf1(seed, mask_len, hash_function=sha3_256):
     """ Gerador de máscara MGF1 baseado no hash fornecido """
     h_len = hash_function().digest_size
     mask = b''
@@ -16,7 +16,7 @@ def mgf1(seed, mask_len, hash_function=sha256):
     return mask[:mask_len]
 
 # Função de Codificação OAEP
-def oaep_encode(message, seed, n_bits, hash_function=sha256):
+def oaep_encode(message, seed, n_bits, hash_function=sha3_256):
     """ Codifica a mensagem usando OAEP """
     k = (n_bits + 7) // 8  # Tamanho do módulo em bytes
     h_len = hash_function().digest_size
@@ -43,7 +43,7 @@ def oaep_encode(message, seed, n_bits, hash_function=sha256):
     return b'\x00' + masked_seed + masked_db
 
 # Função de Decodificação OAEP
-def oaep_decode(encoded_message, n_bits, hash_function=sha256):
+def oaep_decode(encoded_message, n_bits, hash_function=sha3_256):
     """ Decodifica a mensagem codificada usando OAEP """
     k = (n_bits + 7) // 8
     h_len = hash_function().digest_size
@@ -74,7 +74,7 @@ def oaep_decode(encoded_message, n_bits, hash_function=sha256):
     message = db[separator_idx + 1:]
     return message
 
-def rsa_encrypt(plaintext, public_key, hash_function=sha256):
+def rsa_encrypt(plaintext, public_key, hash_function=sha3_256):
     """ Cifra a mensagem utilizando OAEP e a chave pública RSA """
     e, n = public_key
     n_bits = n.bit_length()
@@ -93,7 +93,7 @@ def rsa_encrypt(plaintext, public_key, hash_function=sha256):
     return ciphertext_int
 
 
-def rsa_decrypt(ciphertext, private_key, hash_function=sha256):
+def rsa_decrypt(ciphertext, private_key, hash_function=sha3_256):
     """ Decifra a mensagem utilizando a chave privada RSA e remove OAEP """
     d, n = private_key
     n_bits = n.bit_length()
@@ -195,7 +195,7 @@ def hybrid_decryption(encrypted_aes_key_b64, ciphertext_aes_b64, private_key):
 
 # Parte 3
 
-def rsa_sign(message, private_key, hash_function=sha256):
+def rsa_sign(message, private_key, hash_function=sha3_256):
     """ Assina a mensagem utilizando RSA e SHA-256 """
     # Cálculo do hash da mensagem
     message_hash = hash_function(message.encode()).digest()
@@ -206,7 +206,7 @@ def rsa_sign(message, private_key, hash_function=sha256):
     # Retornar a assinatura em base64
     return base64.b64encode(signed_message.to_bytes((signed_message.bit_length() + 7) // 8, byteorder='big')).decode()
 
-def rsa_verify(signed_message_b64, original_message, public_key, hash_function=sha256):
+def rsa_verify(signed_message_b64, original_message, public_key, hash_function=sha3_256):
     """ Verifica a assinatura da mensagem utilizando RSA e SHA-256 """
     # Decodificar a assinatura em base64
     signed_message = int.from_bytes(base64.b64decode(signed_message_b64), byteorder='big')
@@ -235,7 +235,7 @@ def test_hybrid_encryption():
     print("n:", private_key[1])
 
     # Mensagem a ser cifrada
-    message = "Mensagem Secreta"
+    message = "🚀 Segurança de dados! #Cripto2025 é o futuro. Não deixe seus dados expostos! A criptografia AES/RSA é a chave 🔑."
     print("\nMensagem original:", message)
 
     # Cifração Híbrida
@@ -253,7 +253,8 @@ def test_rsa_signature():
     public_key, private_key = generate_rsa_keys(bits=1024)
 
     # Mensagem a ser assinada
-    message = "Mensagem Secreta"
+    # message = "Mensagem Secreta"
+    message = "🚀 Segurança de dados! #Cripto2025 é o futuro. Não deixe seus dados expostos! A criptografia AES/RSA é a chave 🔑."
     print("\nMensagem original:", message)
 
     # Assinar a mensagem
