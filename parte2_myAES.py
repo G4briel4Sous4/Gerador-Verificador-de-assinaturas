@@ -1,9 +1,9 @@
 import random
 from hashlib import sha256
-from Crypto.Cipher import AES
 from Crypto.Random import get_random_bytes
 from chaves import generate_rsa_keys
 import base64
+import ecb
 
 def mgf1(seed, mask_len, hash_function=sha256):
     """ Gerador de máscara MGF1 baseado no hash fornecido """
@@ -129,31 +129,71 @@ def rsa_decrypt(ciphertext, private_key, hash_function=sha256):
         # Se falhar, retorna a mensagem binária (pode ser chave AES ou outro dado)
         return plaintext
 
-
-# Nova parte
-
 # Função para gerar chave AES
 def generate_aes_key():
-    """ Gera uma chave AES de 256 bits """
-    return get_random_bytes(32)  # 256 bits
+    return get_random_bytes(32) 
+
+def convert_to_decimal_blocks_from_bytes(byte_sequence, block_size=4):
+    # Inicializar uma lista para armazenar os blocos
+    blocks = []
+
+    # Dividir a sequência de bytes em blocos de 16 bytes (4 sub-blocos de 4 bytes)
+    for i in range(0, len(byte_sequence), block_size * 4):
+        block = byte_sequence[i:i + block_size * 4]  # Pega 16 bytes
+        # Dividir esse bloco de 16 bytes em 4 sub-blocos de 4 bytes
+        sub_blocks = [list(block[j:j + block_size]) for j in range(0, len(block), block_size)]
+        blocks.append(sub_blocks)
+
+    return blocks
+
+
+def convert_to_bytes(blocks):
+    # Inicializar uma lista para armazenar os bytes
+    byte_sequence = b''
+    
+    # Iterar sobre cada bloco
+    for block in blocks:
+        for sub_block in block:
+            # Para cada sub-bloco (lista de 4 valores), convertê-los para bytes
+            byte_sequence += bytes(sub_block)
+    
+    return byte_sequence
+
+def convert_to_decimal_blocks(padded_message):
+    # Converter a mensagem para uma lista de inteiros decimais
+    decimal_values = list(padded_message)
+    
+    # Garantir que a lista tenha um tamanho múltiplo de 16 para dividir em blocos de 128 bits
+    # Criando blocos de 16 bytes (128 bits) e dividindo em sublistas de 4 elementos
+    blocks = [decimal_values[i:i + 4] for i in range(0, len(decimal_values), 4)]
+    
+    # Agrupar os blocos de 16 bytes em blocos de 128 bits (4 valores por linha)
+    grouped_blocks = [blocks[i:i + 4] for i in range(0, len(blocks), 4)]
+
+    return grouped_blocks
 
 def aes_encrypt(key, message):
-    print("Key and Message: ", key, message)
-    """ Cifra uma mensagem usando AES em modo ECB """
-    cipher = AES.new(key, AES.MODE_ECB)
-    # Padronizar o comprimento da mensagem para múltiplos de 16 bytes
+    
     padded_message = message + (16 - len(message) % 16) * b'\x00'
 
-    print("Padded_message: ", padded_message)
-    ciphertext = cipher.encrypt(padded_message)
-    return ciphertext  # Não é necessário IV no modo ECB
+    blocks = convert_to_decimal_blocks(padded_message)
+
+    cifrado = ecb.ecb_encrypt(blocks, key)
+
+    em_bytes = convert_to_bytes(cifrado)
+
+    return em_bytes
 
 # Função para decifrar uma mensagem com AES no modo ECB
 def aes_decrypt(key, ciphertext):
-    """ Decifra uma mensagem usando AES em modo ECB """
-    cipher = AES.new(key, AES.MODE_ECB)
-    padded_message = cipher.decrypt(ciphertext)
-    return padded_message.rstrip(b'\x00')  # Remover padding
+
+    converted =  convert_to_decimal_blocks_from_bytes(ciphertext)
+
+    padded_message = ecb.ecb_decrypt(converted, key)
+
+    byte_message = convert_to_bytes(padded_message)
+
+    return byte_message.rstrip(b'\x00') 
 
 
 # Função para cifrar a chave AES com a chave pública RSA
@@ -194,6 +234,7 @@ def hybrid_decryption(encrypted_aes_key_b64, ciphertext_aes_b64, private_key):
 
     # 2. Decifrar a mensagem com AES
     ciphertext_aes = base64.b64decode(ciphertext_aes_b64)
+
     decrypted_message = aes_decrypt(aes_key, ciphertext_aes)
 
     return decrypted_message.decode()

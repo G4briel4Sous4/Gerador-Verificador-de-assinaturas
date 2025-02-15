@@ -1,11 +1,12 @@
+from hashlib import sha3_256  # Usar sha3_256 da hashlib
 import random
-from hashlib import sha256
-from Crypto.Cipher import AES
 from Crypto.Random import get_random_bytes
 from chaves import generate_rsa_keys
 import base64
+import ecb
 
-def mgf1(seed, mask_len, hash_function=sha256):
+# Função para o Gerador de Máscara MGF1
+def mgf1(seed, mask_len, hash_function=sha3_256):
     """ Gerador de máscara MGF1 baseado no hash fornecido """
     h_len = hash_function().digest_size
     mask = b''
@@ -14,7 +15,8 @@ def mgf1(seed, mask_len, hash_function=sha256):
         mask += hash_function(seed + C).digest()
     return mask[:mask_len]
 
-def oaep_encode(message, seed, n_bits, hash_function=sha256):
+# Função de Codificação OAEP
+def oaep_encode(message, seed, n_bits, hash_function=sha3_256):
     """ Codifica a mensagem usando OAEP """
     k = (n_bits + 7) // 8  # Tamanho do módulo em bytes
     h_len = hash_function().digest_size
@@ -40,15 +42,14 @@ def oaep_encode(message, seed, n_bits, hash_function=sha256):
     # Construir o bloco codificado
     return b'\x00' + masked_seed + masked_db
 
-def oaep_decode(encoded_message, n_bits, hash_function=sha256):
+# Função de Decodificação OAEP
+def oaep_decode(encoded_message, n_bits, hash_function=sha3_256):
     """ Decodifica a mensagem codificada usando OAEP """
     k = (n_bits + 7) // 8
     h_len = hash_function().digest_size
 
     # Verificar o comprimento do bloco
     if len(encoded_message) != k or encoded_message[0] != 0:
-        print(f"[DEBUG] Comprimento do bloco: {len(encoded_message)}, esperado: {k}")
-        print(f"[DEBUG] Primeiro byte: {encoded_message[0]}")
         raise ValueError("Formato inválido para OAEP.")
 
     # Separar os blocos
@@ -63,15 +64,9 @@ def oaep_decode(encoded_message, n_bits, hash_function=sha256):
     db_mask = mgf1(seed, len(masked_db), hash_function)
     db = bytes(x ^ y for x, y in zip(masked_db, db_mask))
 
-    # [DEBUG] Verificar valores intermediários
-    print(f"[DEBUG] seed: {seed.hex()}")
-    print(f"[DEBUG] db: {db.hex()}")
-
     # Extrair l_hash, PS e mensagem
     l_hash = hash_function(b'').digest()
     if not db.startswith(l_hash):
-        print(f"[DEBUG] l_hash esperado: {l_hash.hex()}")
-        print(f"[DEBUG] l_hash obtido: {db[:len(l_hash)].hex()}")
         raise ValueError("OAEP decode falhou: hash não corresponde.")
 
     db = db[len(l_hash):]  # Remover l_hash
@@ -79,8 +74,7 @@ def oaep_decode(encoded_message, n_bits, hash_function=sha256):
     message = db[separator_idx + 1:]
     return message
 
-# Modificar as funções de cifração RSA para usar OAEP
-def rsa_encrypt(plaintext, public_key, hash_function=sha256):
+def rsa_encrypt(plaintext, public_key, hash_function=sha3_256):
     """ Cifra a mensagem utilizando OAEP e a chave pública RSA """
     e, n = public_key
     n_bits = n.bit_length()
@@ -99,10 +93,16 @@ def rsa_encrypt(plaintext, public_key, hash_function=sha256):
     return ciphertext_int
 
 
-def rsa_decrypt(ciphertext, private_key, hash_function=sha256):
+def rsa_decrypt(ciphertext, private_key, hash_function=sha3_256):
     """ Decifra a mensagem utilizando a chave privada RSA e remove OAEP """
     d, n = private_key
     n_bits = n.bit_length()
+
+    # Verifique se o ciphertext é um inteiro ou bytes
+    if isinstance(ciphertext, int):
+        ciphertext = ciphertext.to_bytes((ciphertext.bit_length() + 7) // 8, byteorder='big')
+    elif not isinstance(ciphertext, bytes):
+        raise ValueError("O ciphertext precisa ser um inteiro ou bytes.")
 
     # Converter o ciphertext (que está em bytes) para inteiro
     ciphertext_int = int.from_bytes(ciphertext, byteorder='big')
@@ -129,32 +129,72 @@ def rsa_decrypt(ciphertext, private_key, hash_function=sha256):
         # Se falhar, retorna a mensagem binária (pode ser chave AES ou outro dado)
         return plaintext
 
-
-# Nova parte
-
 # Função para gerar chave AES
 def generate_aes_key():
-    """ Gera uma chave AES de 256 bits """
-    return get_random_bytes(32)  # 256 bits
+    return get_random_bytes(32)  
+
+def convert_to_decimal_blocks_from_bytes(byte_sequence, block_size=4):
+    # Inicializar uma lista para armazenar os blocos
+    blocks = []
+
+    # Dividir a sequência de bytes em blocos de 16 bytes (4 sub-blocos de 4 bytes)
+    for i in range(0, len(byte_sequence), block_size * 4):
+        block = byte_sequence[i:i + block_size * 4]  # Pega 16 bytes
+        # Dividir esse bloco de 16 bytes em 4 sub-blocos de 4 bytes
+        sub_blocks = [list(block[j:j + block_size]) for j in range(0, len(block), block_size)]
+        blocks.append(sub_blocks)
+
+    return blocks
+
+
+def convert_to_bytes(blocks):
+    # Inicializar uma lista para armazenar os bytes
+    byte_sequence = b''
+    
+    # Iterar sobre cada bloco
+    for block in blocks:
+        for sub_block in block:
+            # Para cada sub-bloco (lista de 4 valores), convertê-los para bytes
+            byte_sequence += bytes(sub_block)
+    
+    return byte_sequence
+
+def convert_to_decimal_blocks(padded_message):
+    # Converter a mensagem para uma lista de inteiros decimais
+    decimal_values = list(padded_message)
+    
+    # Garantir que a lista tenha um tamanho múltiplo de 16 para dividir em blocos de 128 bits
+    # Criando blocos de 16 bytes (128 bits) e dividindo em sublistas de 4 elementos
+    blocks = [decimal_values[i:i + 4] for i in range(0, len(decimal_values), 4)]
+    
+    # Agrupar os blocos de 16 bytes em blocos de 128 bits (4 valores por linha)
+    grouped_blocks = [blocks[i:i + 4] for i in range(0, len(blocks), 4)]
+
+    return grouped_blocks
 
 def aes_encrypt(key, message):
-    print("Key and Message: ", key, message)
-    """ Cifra uma mensagem usando AES em modo ECB """
-    cipher = AES.new(key, AES.MODE_ECB)
-    # Padronizar o comprimento da mensagem para múltiplos de 16 bytes
+    
     padded_message = message + (16 - len(message) % 16) * b'\x00'
 
-    print("Padded_message: ", padded_message)
-    ciphertext = cipher.encrypt(padded_message)
-    return ciphertext  # Não é necessário IV no modo ECB
+    blocks = convert_to_decimal_blocks(padded_message)
+
+    cifrado = ecb.ecb_encrypt(blocks, key)
+
+    em_bytes = convert_to_bytes(cifrado)
+
+    return em_bytes
 
 # Função para decifrar uma mensagem com AES no modo ECB
 def aes_decrypt(key, ciphertext):
-    """ Decifra uma mensagem usando AES em modo ECB """
-    cipher = AES.new(key, AES.MODE_ECB)
-    padded_message = cipher.decrypt(ciphertext)
-    return padded_message.rstrip(b'\x00')  # Remover padding
 
+    converted =  convert_to_decimal_blocks_from_bytes(ciphertext)
+
+    padded_message = ecb.ecb_decrypt(converted, key)
+
+    byte_message = convert_to_bytes(padded_message)
+
+    # Remover o padding
+    return byte_message.rstrip(b'\x00') 
 
 # Função para cifrar a chave AES com a chave pública RSA
 def rsa_aes_key_encrypt(public_key, aes_key):
@@ -166,7 +206,7 @@ def rsa_aes_key_decrypt(private_key, encrypted_aes_key):
     """ Decifra a chave AES usando a chave privada RSA """
     return rsa_decrypt(encrypted_aes_key, private_key)
 
-# Função principal para cifração híbrida
+# Função para cifração híbrida (RSA + AES)
 def hybrid_encryption(message, public_key):
     """ Realiza a cifração híbrida (RSA + AES) """
     # 1. Gerar chave AES
@@ -184,8 +224,7 @@ def hybrid_encryption(message, public_key):
     # 5. Retornar a chave AES cifrada e a mensagem cifrada
     return base64.b64encode(encrypted_aes_key_bytes).decode(), base64.b64encode(ciphertext_aes).decode()
 
-
-# Função para decifração híbrida
+# Função para decifração híbrida (RSA + AES)
 def hybrid_decryption(encrypted_aes_key_b64, ciphertext_aes_b64, private_key):
     """ Realiza a decifração híbrida (RSA + AES) """
     # 1. Decifrar a chave AES com a chave privada RSA
@@ -198,7 +237,35 @@ def hybrid_decryption(encrypted_aes_key_b64, ciphertext_aes_b64, private_key):
 
     return decrypted_message.decode()
 
-# Teste de cifração e decifração híbrida
+# Parte 3
+
+def rsa_sign(message, private_key, hash_function=sha3_256):
+    """ Assina a mensagem utilizando RSA e SHA-256 """
+    # Cálculo do hash da mensagem
+    message_hash = hash_function(message.encode()).digest()
+
+    # Assinatura do hash com a chave privada
+    signed_message = rsa_encrypt(message_hash, private_key, hash_function)
+
+    # Retornar a assinatura em base64
+    return base64.b64encode(signed_message.to_bytes((signed_message.bit_length() + 7) // 8, byteorder='big')).decode()
+
+def rsa_verify(signed_message_b64, original_message, public_key, hash_function=sha3_256):
+    """ Verifica a assinatura da mensagem utilizando RSA e SHA-256 """
+    # Decodificar a assinatura em base64
+    signed_message = int.from_bytes(base64.b64decode(signed_message_b64), byteorder='big')
+
+    # Decifrar a assinatura (o hash da mensagem)
+    decrypted_hash = rsa_decrypt(signed_message, public_key, hash_function)
+
+    # Calcular o hash da mensagem original
+    original_hash = hash_function(original_message.encode()).digest()
+
+    # Comparar os hashes
+    return decrypted_hash == original_hash
+
+
+# Função de Teste de Cifração e Decifração Híbrida
 def test_hybrid_encryption():
     # Gerar chaves RSA
     public_key, private_key = generate_rsa_keys(bits=1024)
@@ -212,7 +279,7 @@ def test_hybrid_encryption():
     print("n:", private_key[1])
 
     # Mensagem a ser cifrada
-    message = "Mensagem Secreta"
+    message = "🚀 Segurança de dados! #Cripto2025 é o futuro. Não deixe seus dados expostos! A criptografia AES/RSA é a chave 🔑."
     print("\nMensagem original:", message)
 
     # Cifração Híbrida
@@ -224,5 +291,29 @@ def test_hybrid_encryption():
     decrypted_message = hybrid_decryption(encrypted_aes_key_b64, ciphertext_aes_b64, private_key)
     print("\nMensagem decifrada:", decrypted_message)
 
+    # Função de Teste de Assinatura e Verificação
+def test_rsa_signature():
+    # Gerar chaves RSA
+    public_key, private_key = generate_rsa_keys(bits=1024)
+
+    # Mensagem a ser assinada
+    # message = "Mensagem Secreta"
+    message = "🚀 Segurança de dados! #Cripto2025 é o futuro. Não deixe seus dados expostos! A criptografia AES/RSA é a chave 🔑."
+    print("\nMensagem original:", message)
+
+    # Assinar a mensagem
+    signed_message_b64 = rsa_sign(message, private_key)
+    print("\nAssinatura (base64):", signed_message_b64)
+
+    # Verificar a assinatura
+    is_valid = rsa_verify(signed_message_b64, message, public_key)
+    print("\nAssinatura válida:", is_valid)
+
 # Executando o teste
 test_hybrid_encryption()
+
+# Executando o teste de assinatura e verificação
+test_rsa_signature()
+
+
+

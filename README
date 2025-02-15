@@ -1,5 +1,5 @@
-chaves.py gera as chaves com sucesso tanto para a parte 1 quanto para a parte 2!
-parte1.py está com a parte 1 completa
-parte2.py está com a parte 2 completa
+Esse trabalho é dividido em 3 partes, como pode ser visto no PDF.
 
-
+O código parte1.py executa a parte 1 do trabalho.
+Já as partes 2 e 3 têm dois códigos cada, sendo que os códigos 
+que têm _myAES utilizam a minha própria implementação do AES, e os outros utilizam a biblioteca Crypto.cipher
